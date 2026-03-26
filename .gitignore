@@ -1,0 +1,14 @@
+.env
+
+output/*
+!output/.gitkeep
+
+sources/pdf/*
+!sources/pdf/.gitkeep
+
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
