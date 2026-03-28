@@ -3,7 +3,6 @@ from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from pydantic import ValidationError
-from supabase import Client, create_client
 
 from schema import SourceDocument
 
@@ -13,7 +12,14 @@ TARGET_SCHEMA = "core"
 TARGET_TABLE  = "source_documents"
 
 
-def get_supabase_client() -> Client:
+def get_supabase_client():
+    try:
+        from supabase import create_client
+    except ImportError:
+        raise ImportError(
+            "supabase is not installed. Run: pip install supabase\n"
+            "Or use --dry-run to skip Supabase import."
+        )
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_KEY")
     if not url:
