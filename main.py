@@ -23,8 +23,10 @@ def save_output(data: dict, label: str) -> Path:
     return out_path
 
 
-def process(raw_text: str, label: str, dry_run: bool) -> None:
-    print(f"[structurer] Sending {len(raw_text)} chars to Claude ({label})...")
+def process(raw_text: str, label: str, dry_run: bool,
+            source_url: str = "", source_type: str = "html") -> None:
+    if isinstance(raw_text, str):
+        print(f"[structurer] Sending {len(raw_text)} chars to Claude ({label})...")
     structured = structure_text(raw_text)
 
     out_path = save_output(structured, label)
@@ -35,9 +37,9 @@ def process(raw_text: str, label: str, dry_run: bool) -> None:
         print(json.dumps(structured, indent=2, ensure_ascii=False))
         print("[dry-run] Skipping Supabase import.")
     else:
-        print("[importer] Validating and inserting into Supabase...")
-        result = import_procedure(structured)
-        print(f"[importer] Inserted record: {result}")
+        print("[importer] Inserting into core.source_documents...")
+        result = import_procedure(structured, source_url=source_url, source_type=source_type)
+        print(f"[importer] Inserted record id={result.get('id')}")
 
 
 def run_single(args: argparse.Namespace) -> None:
@@ -46,20 +48,24 @@ def run_single(args: argparse.Namespace) -> None:
     if source == "html":
         print(f"[scraper] Fetching HTML from {args.url}")
         raw = scrape_html(args.url)
-        label = (raw.get("act", "") or args.url.rstrip("/").split("/")[-1] or "html_page")
+        label = (raw.get("act", "") if isinstance(raw, dict) else "") \
+                or args.url.rstrip("/").split("/")[-1] or "html_page"
+        source_url = args.url
     elif source == "pdf":
         print(f"[scraper] Extracting PDF text from {args.file}")
         raw = scrape_pdf(args.file)
         label = Path(args.file).stem
+        source_url = ""
     elif source == "xml":
         print(f"[scraper] Parsing XML from {args.file}")
         raw = scrape_xml(args.file, section_id=args.section)
         label = Path(args.file).stem + (f"_{args.section}" if args.section else "")
+        source_url = ""
     else:
         print(f"Unknown source: {source}", file=sys.stderr)
         sys.exit(1)
 
-    process(raw, label, dry_run=args.dry_run)
+    process(raw, label, dry_run=args.dry_run, source_url=source_url, source_type=source)
 
 
 def run_batch(args: argparse.Namespace) -> None:
@@ -93,7 +99,8 @@ def run_batch(args: argparse.Namespace) -> None:
                 raw = scrape_xml(filepath)
             else:
                 raise ValueError(f"Unknown source type: {source_type}")
-            process(raw, label, dry_run=args.dry_run)
+            stype = "html" if source_type == "html_file" else source_type
+            process(raw, label, dry_run=args.dry_run, source_url="", source_type=stype)
         except Exception as e:
             print(f"[batch] ERROR processing {filepath}: {e}", file=sys.stderr)
             errors.append((filepath, str(e)))

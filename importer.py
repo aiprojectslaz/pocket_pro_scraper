@@ -1,14 +1,16 @@
 import os
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from pydantic import ValidationError
 from supabase import Client, create_client
 
-from schema import Act
+from schema import SourceDocument
 
 load_dotenv()
 
-TABLE_NAME = "procedures"
+TARGET_SCHEMA = "core"
+TARGET_TABLE  = "source_documents"
 
 
 def get_supabase_client() -> Client:
@@ -21,16 +23,31 @@ def get_supabase_client() -> Client:
     return create_client(url, key)
 
 
-def import_procedure(data: dict) -> dict:
+def _extract_domain(url: str) -> str:
+    return urlparse(url).netloc.replace("www.", "") if url else ""
+
+
+def import_procedure(data: dict, source_url: str = "", source_type: str = "html") -> dict:
+    doc = SourceDocument(
+        title=data.get("act", data.get("procedure_name", "")),
+        source_url=source_url,
+        source_type=source_type,
+        domain=_extract_domain(source_url),
+        content=data,
+    )
+
     try:
-        act = Act(**data)
+        validated = doc.model_validate(doc.model_dump())
     except ValidationError as e:
         raise ValueError(f"Schema validation failed:\n{e}") from e
 
     client = get_supabase_client()
-    serialized = act.model_dump()
-
-    response = client.table(TABLE_NAME).insert(serialized).execute()
+    response = (
+        client.schema(TARGET_SCHEMA)
+        .table(TARGET_TABLE)
+        .insert(validated.model_dump())
+        .execute()
+    )
 
     if not response.data:
         raise RuntimeError(
