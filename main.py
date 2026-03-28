@@ -46,7 +46,7 @@ def run_single(args: argparse.Namespace) -> None:
     if source == "html":
         print(f"[scraper] Fetching HTML from {args.url}")
         raw = scrape_html(args.url)
-        label = args.url.rstrip("/").split("/")[-1] or "html_page"
+        label = (raw.get("act", "") or args.url.rstrip("/").split("/")[-1] or "html_page")
     elif source == "pdf":
         print(f"[scraper] Extracting PDF text from {args.file}")
         raw = scrape_pdf(args.file)
