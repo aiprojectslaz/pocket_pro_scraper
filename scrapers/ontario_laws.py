@@ -14,10 +14,12 @@ from .base import fetch_soup_js, get_text
 
 
 def _parse(soup: BeautifulSoup) -> dict:
+    # Use the <title> tag — it's server-rendered and always has the correct act name.
+    # Strip the " | ontario.ca" suffix the site appends.
     act_title = ""
-    title_el = soup.select_one("h1, .act-title, #act-title")
+    title_el = soup.select_one("title")
     if title_el:
-        act_title = get_text(title_el)
+        act_title = title_el.get_text(strip=True).split(" | ")[0].strip()
 
     sections = []
     current_section = None
