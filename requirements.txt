@@ -3,6 +3,8 @@ beautifulsoup4
 pdfplumber
 lxml
 anthropic
-# supabase  # optional — only needed for live Supabase imports (not --dry-run)
+# supabase    # optional — only needed for live Supabase imports (not --dry-run)
+# playwright  # optional — only needed for JS-rendered sites (ontario.ca)
+#             # after install run: playwright install chromium
 python-dotenv
 pydantic>=2.0
