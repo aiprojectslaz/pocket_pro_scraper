@@ -6,6 +6,12 @@ output/*
 sources/pdf/*
 !sources/pdf/.gitkeep
 
+sources/html/*
+!sources/html/.gitkeep
+
+sources/xml/*
+!sources/xml/.gitkeep
+
 __pycache__/
 *.py[cod]
 *.egg-info/
