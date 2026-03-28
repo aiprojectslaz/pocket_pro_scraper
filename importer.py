@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from pydantic import ValidationError
 from supabase import Client, create_client
 
-from schema import Procedure
+from schema import Act
 
 load_dotenv()
 
@@ -23,12 +23,12 @@ def get_supabase_client() -> Client:
 
 def import_procedure(data: dict) -> dict:
     try:
-        procedure = Procedure(**data)
+        act = Act(**data)
     except ValidationError as e:
         raise ValueError(f"Schema validation failed:\n{e}") from e
 
     client = get_supabase_client()
-    serialized = procedure.model_dump()
+    serialized = act.model_dump()
 
     response = client.table(TABLE_NAME).insert(serialized).execute()
 

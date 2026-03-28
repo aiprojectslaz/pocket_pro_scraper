@@ -12,46 +12,43 @@ MAX_TOKENS = 4096
 
 SYSTEM_PROMPT = """\
 You are a document structuring assistant. You will be given raw text extracted from a \
-government procedure document. Your task is to extract and return structured data as \
-valid JSON — nothing else. Do not include any explanation, markdown fences, or extra text.
+government statute or legislation document. Your task is to extract and return structured \
+data as valid JSON — nothing else. Do not include any explanation, markdown fences, or \
+extra text.
 
 Return a single JSON object matching this exact schema:
 {
-  "procedure_name": "string",
-  "procedure_number": "string",
-  "procedure_chapter": "string",
-  "rationale": "string",
-  "roles": [
+  "act": "string — the full title of the Act",
+  "sections": [
     {
-      "role_title": "string",
-      "steps": ["string"]
-    }
-  ],
-  "sub_procedures": [
-    {
-      "title": "string",
-      "content": "string"
-    }
-  ],
-  "definitions": [
-    {
-      "term": "string",
-      "definition": "string"
+      "section_number": "string — e.g. '1', '2(1)', '494'",
+      "title": "string — section heading/marginal note if present, else empty string",
+      "text": "string — introductory text of the section before subsections, or full text if no subsections",
+      "subsections": [
+        {
+          "text": "string — full text of this subsection",
+          "paragraphs": ["string — each lettered paragraph (a), (b)... as a separate item"],
+          "note": "string — any marginal or editorial note attached to this subsection, else empty string"
+        }
+      ],
+      "note": "string — any marginal or editorial note at the section level, else empty string"
     }
   ]
 }
 
 Rules:
 - All fields are required. Use empty strings or empty arrays if information is not present.
-- Extract as much detail as possible from the source text.
-- Each role's steps should be individual action sentences in the order they appear.
-- Sub-procedures are named sections describing a subordinate process.
-- Definitions come from any glossary or definitions section in the document.
+- Extract every section found in the document in order.
+- Paragraphs are the lettered sub-items within a subsection, e.g. (a), (b), (c).
 - Return only the JSON object. No markdown, no commentary.
 """
 
 
-def structure_text(raw_text: str) -> dict:
+def structure_text(raw: str | dict) -> dict:
+    # HTML scraper already returns structured data — pass through without calling Claude
+    if isinstance(raw, dict):
+        return raw
+
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         raise KeyError("ANTHROPIC_API_KEY environment variable is not set")
@@ -63,7 +60,7 @@ def structure_text(raw_text: str) -> dict:
         max_tokens=MAX_TOKENS,
         system=SYSTEM_PROMPT,
         messages=[
-            {"role": "user", "content": f"Document text:\n\n{raw_text}"}
+            {"role": "user", "content": f"Document text:\n\n{raw}"}
         ],
     )
 
