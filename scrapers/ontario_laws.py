@@ -10,7 +10,7 @@ A plain requests fetch will return a JS-wall page with no sections.
 """
 
 from bs4 import BeautifulSoup
-from .base import fetch_soup, get_text
+from .base import fetch_soup_js, get_text
 
 
 def _parse(soup: BeautifulSoup) -> dict:
@@ -66,13 +66,10 @@ def _parse(soup: BeautifulSoup) -> dict:
 
 
 def scrape(url: str) -> dict:
-    soup = fetch_soup(url)
+    soup = fetch_soup_js(url, wait_for=".section")
     result = _parse(soup)
     if not result["sections"]:
-        raise ValueError(
-            f"No sections found at {url}. "
-            "ontario.ca requires JavaScript — use a saved/rendered HTML file if scraping live."
-        )
+        raise ValueError(f"No sections found at {url}")
     return result
 
 
