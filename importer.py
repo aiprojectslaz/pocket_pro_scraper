@@ -1,4 +1,5 @@
 import os
+import requests
 from urllib.parse import urlparse
 
 from dotenv import load_dotenv
@@ -12,21 +13,22 @@ TARGET_SCHEMA = "core"
 TARGET_TABLE  = "source_documents"
 
 
-def get_supabase_client():
-    try:
-        from supabase import create_client
-    except ImportError:
-        raise ImportError(
-            "supabase is not installed. Run: pip install supabase\n"
-            "Or use --dry-run to skip Supabase import."
-        )
+def _supabase_creds() -> tuple[str, dict]:
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_KEY")
     if not url:
         raise KeyError("SUPABASE_URL environment variable is not set")
     if not key:
         raise KeyError("SUPABASE_KEY environment variable is not set")
-    return create_client(url, key)
+    headers = {
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+        "Content-Profile": TARGET_SCHEMA,
+        "Accept-Profile": TARGET_SCHEMA,
+        "Prefer": "return=representation",
+    }
+    return url, headers
 
 
 def _extract_domain(url: str) -> str:
@@ -47,17 +49,14 @@ def import_procedure(data: dict, source_url: str = "", source_type: str = "html"
     except ValidationError as e:
         raise ValueError(f"Schema validation failed:\n{e}") from e
 
-    client = get_supabase_client()
-    response = (
-        client.schema(TARGET_SCHEMA)
-        .table(TARGET_TABLE)
-        .insert(validated.model_dump())
-        .execute()
-    )
+    supabase_url, headers = _supabase_creds()
+    endpoint = f"{supabase_url}/rest/v1/{TARGET_TABLE}"
+    response = requests.post(endpoint, headers=headers, json=validated.model_dump())
 
-    if not response.data:
+    if not response.ok:
         raise RuntimeError(
-            f"Supabase insert returned no data. Response: {response}"
+            f"Supabase insert failed ({response.status_code}): {response.text}"
         )
 
-    return response.data[0]
+    rows = response.json()
+    return rows[0] if isinstance(rows, list) else rows
