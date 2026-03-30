@@ -9,6 +9,8 @@ correctly on the rendered DOM (e.g. a saved HTML file or via Playwright).
 A plain requests fetch will return a JS-wall page with no sections.
 """
 
+import re
+
 from bs4 import BeautifulSoup
 from .base import fetch_soup_js, get_text
 
@@ -32,29 +34,33 @@ def _parse(soup: BeautifulSoup) -> dict:
     if title_el:
         act_title = title_el.get_text(strip=True).split(" | ")[0].strip()
 
-    short_title  = _first_text(soup, "p.shorttitle",    "")
-    chapter      = _first_text(soup, "p.chapter",       "Chapter")
-    last_amended = _first_text(soup, "p.lastAmendDate", "Last amendment")
+    short_title = _first_text(soup, "p.shorttitle", "")
+    chapter     = _first_text(soup, "p.chapter",    "Chapter")
 
-    # Consolidation period and currency date live in the same element, e.g.:
-    # "Consolidation period: April 19, 2021 - e-Laws currency date (March 25, 2026)"
+    # Bug fix: both dates live in ONE element, e.g.:
+    # "Consolidation period:April 19, 2021 -e-Laws currency date(March 25, 2026)"
+    # Use regex to extract just the bare date strings.
     combined_el = soup.select_one("p.DocVer") or next(
         (p for p in soup.find_all("p") if "Consolidation period" in p.get_text()), None
     )
     combined = combined_el.get_text(strip=True) if combined_el else ""
-    if " - e-Laws currency date" in combined:
-        version_date  = combined.split(" - e-Laws currency date")[0].strip()
-        currency_date = "e-Laws currency date" + combined.split(" - e-Laws currency date")[1].strip()
-    else:
-        version_date  = combined
-        currency_date = ""
+    m = re.search(r'Consolidation period[^A-Za-z]+([A-Za-z].*?)\s*-\s*e-Laws', combined)
+    version_date = m.group(1).strip() if m else combined
+    m2 = re.search(r'e-Laws currency date[^A-Za-z(]*\(?([A-Za-z].*?)\)?$', combined)
+    currency_date = m2.group(1).strip() if m2 else ""
 
-    # Regulations: each entry has a volume-label (reg number) and a title
+    # Bug fix: strip the "Last amendment:" label prefix, keep only the citation.
+    last_amended_raw = _first_text(soup, "p.lastAmendDate", "Last amendment")
+    last_amended = re.sub(r'^Last amendment\s*[:\s]+', '', last_amended_raw,
+                          flags=re.IGNORECASE).strip()
+
+    # Regulations: pair volume-label (reg number) with doc-row title.
+    # Use re.compile for partial class matching to handle BEM naming variations.
     regulations = []
     reg_div = soup.select_one("div.reg-content")
     if reg_div:
-        labels = reg_div.select(".doc-row__volume-label")
-        titles = reg_div.select(".doc-row__title")
+        labels = reg_div.find_all(class_=re.compile(r"volume-label"))
+        titles  = reg_div.find_all(class_=re.compile(r"doc-row.*title|row.*title"))
         for i, label_el in enumerate(labels):
             number = label_el.get_text(strip=True)
             title  = titles[i].get_text(strip=True) if i < len(titles) else ""
@@ -64,27 +70,29 @@ def _parse(soup: BeautifulSoup) -> dict:
     sections = []
     current_section = None
     current_subsection = None
+    # Bug fix: headnotes in the Ontario e-Laws DOM are siblings that appear
+    # BEFORE their section div, not children inside it.  Buffer the headnote
+    # text and apply it when the next section element is created.
+    pending_headnote = ""
 
     for el in soup.find_all(True):
         classes = el.get("class", [])
 
         if "section" in classes:
             bold = el.find("b")
-            # Store only the element's immediate text children to avoid
-            # duplicating subsection content at the section level.
             current_section = {
                 "section_number": get_text(bold) if bold else "",
-                "title": "",
+                "title": pending_headnote,   # apply buffered headnote
                 "text": get_text(el),
                 "subsections": [],
                 "note": "",
             }
+            pending_headnote = ""            # reset buffer
             current_subsection = None
             sections.append(current_section)
 
         elif "headnote" in classes:
-            if current_section:
-                current_section["title"] = el.get_text(strip=True)
+            pending_headnote = el.get_text(strip=True)   # buffer for next section
 
         elif "subsection" in classes:
             if current_section:
