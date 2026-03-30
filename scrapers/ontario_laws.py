@@ -57,7 +57,7 @@ def _parse(soup: BeautifulSoup) -> dict:
     # Regulations: pair volume-label (reg number) with doc-row title.
     # Use CSS [class*=] substring selector — more reliable than exact class match.
     regulations = []
-    reg_div = soup.select_one("div.reg-content")
+    reg_div = soup.select_one("#reg-content")   # id="reg-content", not a class
     if reg_div:
         labels = reg_div.select('[class*="volume-label"]')
         titles  = reg_div.select('[class*="doc-row__title"]')
