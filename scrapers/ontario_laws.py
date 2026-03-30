@@ -13,6 +13,17 @@ from bs4 import BeautifulSoup
 from .base import fetch_soup_js, get_text
 
 
+def _first_text(soup: BeautifulSoup, selector: str, fallback_substr: str) -> str:
+    """Try CSS selector first; fall back to first <p> containing fallback_substr."""
+    el = soup.select_one(selector)
+    if not el and fallback_substr:
+        el = next(
+            (p for p in soup.find_all("p") if fallback_substr in p.get_text()),
+            None,
+        )
+    return el.get_text(strip=True) if el else ""
+
+
 def _parse(soup: BeautifulSoup) -> dict:
     # Use the <title> tag — it's server-rendered and always has the correct act name.
     # Strip the " | ontario.ca" suffix the site appends.
@@ -20,6 +31,20 @@ def _parse(soup: BeautifulSoup) -> dict:
     title_el = soup.select_one("title")
     if title_el:
         act_title = title_el.get_text(strip=True).split(" | ")[0].strip()
+
+    short_title   = _first_text(soup, "p.shorttitle",    "")
+    chapter       = _first_text(soup, "p.chapter",       "Chapter")
+    version_date  = _first_text(soup, "p.DocVer",        "Consolidation Period")
+    currency_date = _first_text(soup, "p.currencyDate",  "e-Laws currency date")
+    last_amended  = _first_text(soup, "p.lastAmendDate", "Last amendment")
+
+    regulations = []
+    reg_div = soup.select_one("div.reg-content")
+    if reg_div:
+        for entry in reg_div.find_all(["p", "li", "a"]):
+            text = entry.get_text(strip=True)
+            if text:
+                regulations.append(text)
 
     sections = []
     current_section = None
@@ -64,7 +89,16 @@ def _parse(soup: BeautifulSoup) -> dict:
             if target:
                 target["note"] = el.get_text(strip=True)
 
-    return {"act": act_title, "sections": sections}
+    return {
+        "act": act_title,
+        "short_title": short_title,
+        "chapter": chapter,
+        "version_date": version_date,
+        "currency_date": currency_date,
+        "last_amended": last_amended,
+        "regulations": regulations,
+        "sections": sections,
+    }
 
 
 def scrape(url: str) -> dict:

@@ -17,6 +17,12 @@ class Section(BaseModel):
 
 class Act(BaseModel):
     act: str
+    short_title: str = ""
+    chapter: str = ""
+    version_date: str = ""
+    currency_date: str = ""
+    last_amended: str = ""
+    regulations: list[str] = []
     sections: list[Section]
 
 
