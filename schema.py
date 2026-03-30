@@ -15,15 +15,20 @@ class Section(BaseModel):
     note: str = ""
 
 
+class Regulation(BaseModel):
+    number: str = ""   # e.g. "O. Reg. 261/13"
+    title:  str = ""   # e.g. "DESIGNATED DISEASES"
+
+
 class Act(BaseModel):
     act: str
-    short_title: str = ""
-    chapter: str = ""
-    version_date: str = ""
-    currency_date: str = ""
-    last_amended: str = ""
-    regulations: list[str] = []
-    sections: list[Section]
+    short_title:   str = ""
+    chapter:       str = ""
+    version_date:  str = ""   # "Consolidation period: April 19, 2021"
+    currency_date: str = ""   # "e-Laws currency date (March 25, 2026)"
+    last_amended:  str = ""
+    regulations:   list[Regulation] = []
+    sections:      list[Section]
 
 
 class SourceDocument(BaseModel):

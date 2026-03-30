@@ -32,19 +32,34 @@ def _parse(soup: BeautifulSoup) -> dict:
     if title_el:
         act_title = title_el.get_text(strip=True).split(" | ")[0].strip()
 
-    short_title   = _first_text(soup, "p.shorttitle",    "")
-    chapter       = _first_text(soup, "p.chapter",       "Chapter")
-    version_date  = _first_text(soup, "p.DocVer",        "Consolidation Period")
-    currency_date = _first_text(soup, "p.currencyDate",  "e-Laws currency date")
-    last_amended  = _first_text(soup, "p.lastAmendDate", "Last amendment")
+    short_title  = _first_text(soup, "p.shorttitle",    "")
+    chapter      = _first_text(soup, "p.chapter",       "Chapter")
+    last_amended = _first_text(soup, "p.lastAmendDate", "Last amendment")
 
+    # Consolidation period and currency date live in the same element, e.g.:
+    # "Consolidation period: April 19, 2021 - e-Laws currency date (March 25, 2026)"
+    combined_el = soup.select_one("p.DocVer") or next(
+        (p for p in soup.find_all("p") if "Consolidation period" in p.get_text()), None
+    )
+    combined = combined_el.get_text(strip=True) if combined_el else ""
+    if " - e-Laws currency date" in combined:
+        version_date  = combined.split(" - e-Laws currency date")[0].strip()
+        currency_date = "e-Laws currency date" + combined.split(" - e-Laws currency date")[1].strip()
+    else:
+        version_date  = combined
+        currency_date = ""
+
+    # Regulations: each entry has a volume-label (reg number) and a title
     regulations = []
     reg_div = soup.select_one("div.reg-content")
     if reg_div:
-        for entry in reg_div.find_all(["p", "li", "a"]):
-            text = entry.get_text(strip=True)
-            if text:
-                regulations.append(text)
+        labels = reg_div.select(".doc-row__volume-label")
+        titles = reg_div.select(".doc-row__title")
+        for i, label_el in enumerate(labels):
+            number = label_el.get_text(strip=True)
+            title  = titles[i].get_text(strip=True) if i < len(titles) else ""
+            if number or title:
+                regulations.append({"number": number, "title": title})
 
     sections = []
     current_section = None
