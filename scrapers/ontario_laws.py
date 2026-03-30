@@ -105,9 +105,20 @@ def _parse(soup: BeautifulSoup) -> dict:
 
         elif "definition" in classes:
             if current_section:
+                # Split the term (bold) from the definition text that follows it.
+                bold = el.find("b") or el.find("dfn")
+                if bold:
+                    term = bold.get_text(strip=True)
+                    full_raw = el.get_text()   # no strip — preserves space before "means"
+                    bold_raw = bold.get_text()
+                    idx = full_raw.find(bold_raw)
+                    definition_text = full_raw[idx + len(bold_raw):] if idx != -1 else ""
+                else:
+                    term = get_text(el)
+                    definition_text = ""
                 current_subsection = {
-                    "text": get_text(el),
-                    "paragraphs": [],
+                    "text": term,
+                    "paragraphs": [definition_text] if definition_text.strip() else [],
                     "note": "",
                 }
                 current_section["subsections"].append(current_subsection)
