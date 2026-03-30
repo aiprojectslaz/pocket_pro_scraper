@@ -55,12 +55,12 @@ def _parse(soup: BeautifulSoup) -> dict:
                           flags=re.IGNORECASE).strip()
 
     # Regulations: pair volume-label (reg number) with doc-row title.
-    # Use re.compile for partial class matching to handle BEM naming variations.
+    # Use CSS [class*=] substring selector — more reliable than exact class match.
     regulations = []
     reg_div = soup.select_one("div.reg-content")
     if reg_div:
-        labels = reg_div.find_all(class_=re.compile(r"volume-label"))
-        titles  = reg_div.find_all(class_=re.compile(r"doc-row.*title|row.*title"))
+        labels = reg_div.select('[class*="volume-label"]')
+        titles  = reg_div.select('[class*="doc-row__title"]')
         for i, label_el in enumerate(labels):
             number = label_el.get_text(strip=True)
             title  = titles[i].get_text(strip=True) if i < len(titles) else ""
@@ -95,6 +95,15 @@ def _parse(soup: BeautifulSoup) -> dict:
             pending_headnote = el.get_text(strip=True)   # buffer for next section
 
         elif "subsection" in classes:
+            if current_section:
+                current_subsection = {
+                    "text": get_text(el),
+                    "paragraphs": [],
+                    "note": "",
+                }
+                current_section["subsections"].append(current_subsection)
+
+        elif "definition" in classes:
             if current_section:
                 current_subsection = {
                     "text": get_text(el),
