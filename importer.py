@@ -9,7 +9,7 @@ from schema import SourceDocument
 
 load_dotenv()
 
-TARGET_SCHEMA = "core"
+TARGET_SCHEMA = "raw"
 TARGET_TABLE  = "source_documents"
 
 
@@ -35,7 +35,8 @@ def _extract_domain(url: str) -> str:
     return urlparse(url).netloc.replace("www.", "") if url else ""
 
 
-def import_procedure(data: dict, source_url: str = "", source_type: str = "html") -> dict:
+def import_procedure(data: dict, source_url: str = "", source_type: str = "html",
+                     source_id: str | None = None) -> dict:
     doc = SourceDocument(
         title=data.get("act", data.get("procedure_name", "")),
         source_url=source_url,
@@ -49,9 +50,13 @@ def import_procedure(data: dict, source_url: str = "", source_type: str = "html"
     except ValidationError as e:
         raise ValueError(f"Schema validation failed:\n{e}") from e
 
+    payload = validated.model_dump()
+    if source_id:
+        payload["source_id"] = source_id
+
     supabase_url, headers = _supabase_creds()
     endpoint = f"{supabase_url}/rest/v1/{TARGET_TABLE}"
-    response = requests.post(endpoint, headers=headers, json=validated.model_dump())
+    response = requests.post(endpoint, headers=headers, json=payload)
 
     if not response.ok:
         raise RuntimeError(

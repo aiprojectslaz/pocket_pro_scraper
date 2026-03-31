@@ -24,7 +24,8 @@ def save_output(data: dict, label: str) -> Path:
 
 
 def process(raw_text: str, label: str, dry_run: bool,
-            source_url: str = "", source_type: str = "html") -> None:
+            source_url: str = "", source_type: str = "html",
+            source_id: str | None = None) -> None:
     if isinstance(raw_text, str):
         print(f"[structurer] Sending {len(raw_text)} chars to Claude ({label})...")
     structured = structure_text(raw_text)
@@ -37,8 +38,9 @@ def process(raw_text: str, label: str, dry_run: bool,
         print(json.dumps(structured, indent=2, ensure_ascii=False))
         print("[dry-run] Skipping Supabase import.")
     else:
-        print("[importer] Inserting into core.source_documents...")
-        result = import_procedure(structured, source_url=source_url, source_type=source_type)
+        print("[importer] Inserting into raw.source_documents...")
+        result = import_procedure(structured, source_url=source_url,
+                                  source_type=source_type, source_id=source_id)
         print(f"[importer] Inserted record id={result.get('id')}")
 
 
@@ -65,7 +67,8 @@ def run_single(args: argparse.Namespace) -> None:
         print(f"Unknown source: {source}", file=sys.stderr)
         sys.exit(1)
 
-    process(raw, label, dry_run=args.dry_run, source_url=source_url, source_type=source)
+    process(raw, label, dry_run=args.dry_run, source_url=source_url,
+            source_type=source, source_id=getattr(args, "source_id", None))
 
 
 def run_batch(args: argparse.Namespace) -> None:
@@ -143,6 +146,11 @@ Examples:
         "--dry-run",
         action="store_true",
         help="Print JSON and save to output/ but skip Supabase import",
+    )
+    parser.add_argument(
+        "--source-id",
+        dest="source_id",
+        help="UUID from content_sources table to link this document to a known source",
     )
     return parser
 
