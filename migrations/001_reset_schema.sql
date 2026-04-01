@@ -189,7 +189,24 @@ ALTER TABLE public.content_sources  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_subscriptions ENABLE ROW LEVEL SECURITY;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 7. RLS POLICIES
+-- 7. HELPER — tier rank function for cross-enum comparison
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- Maps any tier enum value (cast to text) to an integer rank so we can
+-- compare access_tier vs content_tier without a cross-type >= operator.
+CREATE OR REPLACE FUNCTION public.tier_rank(t text) RETURNS int
+    LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+        SELECT CASE t
+            WHEN 'free'       THEN 1
+            WHEN 'registered' THEN 2
+            WHEN 'paid'       THEN 3
+            WHEN 'org'        THEN 4
+            ELSE 0
+        END;
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 8. RLS POLICIES
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- core.acts — public read (free tier is open); write only via service_role
@@ -208,7 +225,7 @@ CREATE POLICY "acts: authenticated read paid"
                 SELECT 1 FROM public.user_subscriptions us
                 WHERE us.user_id = auth.uid()
                   AND us.active = true
-                  AND us.plan >= content_tier
+                  AND public.tier_rank(us.plan::text) >= public.tier_rank(content_tier::text)
             )
         )
     );
@@ -237,6 +254,7 @@ CREATE POLICY "sections: authenticated read"
                       SELECT 1 FROM public.user_subscriptions us
                       WHERE us.user_id = auth.uid()
                         AND us.active = true
+                        AND public.tier_rank(us.plan::text) >= public.tier_rank(a.content_tier::text)
                   )
               )
         )
