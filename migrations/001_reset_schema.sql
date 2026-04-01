@@ -379,7 +379,29 @@ GRANT SELECT ON core.acts     TO anon, authenticated;
 GRANT SELECT ON core.sections TO anon, authenticated;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 9. SEED — public.content_sources
+-- 9. TRIGGER — auto-populate source_id on raw.source_documents insert
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION raw.set_source_id()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.source_id IS NULL AND NEW.source_url <> '' THEN
+        SELECT id INTO NEW.source_id
+        FROM public.content_sources
+        WHERE source_url = NEW.source_url
+        LIMIT 1;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_set_source_id
+    BEFORE INSERT ON raw.source_documents
+    FOR EACH ROW
+    EXECUTE FUNCTION raw.set_source_id();
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 10. SEED — public.content_sources
 -- ─────────────────────────────────────────────────────────────────────────────
 
 INSERT INTO public.content_sources (name, tier, jurisdiction, licence, source_url, attribution)
