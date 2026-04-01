@@ -113,17 +113,17 @@ def _parse(soup: BeautifulSoup) -> dict:
                     else:
                         translation = ""
 
+                    note = f”({translation})” if translation else “”
                     current_subsection = {
-                        "text": f'“{term}”,',
-                        "paragraphs": f"{keyword} {definition_text}",
-                        "translation": translation,
-                        "note": "",
+                        “text”: f'”{term}”,',
+                        “paragraphs”: [f”{keyword} {definition_text}”],
+                        “note”: note,
                     }
 
                 else:
                     current_subsection = {
                         "text": text_full,
-                        "paragraphs": "",
+                        "paragraphs": [],
                         "note": "",
                     }
 
@@ -144,13 +144,7 @@ def _parse(soup: BeautifulSoup) -> dict:
             if current_subsection:
                 para_text = get_text(el)
 
-                if isinstance(current_subsection["paragraphs"], list):
-                    current_subsection["paragraphs"].append(para_text)
-                else:
-                    if current_subsection["paragraphs"]:
-                        current_subsection["paragraphs"] += " " + para_text
-                    else:
-                        current_subsection["paragraphs"] = para_text
+                current_subsection["paragraphs"].append(para_text)
 
         # NOTES
         elif "Pnote" in classes:
