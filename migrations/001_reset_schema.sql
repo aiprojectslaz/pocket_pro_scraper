@@ -262,10 +262,28 @@ CREATE POLICY "sections: authenticated read"
         )
     );
 
--- raw.source_documents — service_role only (no public/user access)
-CREATE POLICY "raw docs: service role only"
+-- raw.source_documents — pipeline access
+-- service_role bypasses RLS automatically, but PostgREST still needs explicit
+-- policies when the API key is used directly via REST.
+CREATE POLICY "raw: service role all"
     ON raw.source_documents FOR ALL
     TO service_role
+    USING (true)
+    WITH CHECK (true);
+
+CREATE POLICY "raw: insert open"
+    ON raw.source_documents FOR INSERT
+    TO anon, authenticated
+    WITH CHECK (true);
+
+CREATE POLICY "raw: select open"
+    ON raw.source_documents FOR SELECT
+    TO anon, authenticated
+    USING (true);
+
+CREATE POLICY "raw: update open"
+    ON raw.source_documents FOR UPDATE
+    TO anon, authenticated
     USING (true)
     WITH CHECK (true);
 
