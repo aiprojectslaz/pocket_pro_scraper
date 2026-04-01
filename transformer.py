@@ -31,14 +31,14 @@ def _creds() -> tuple[str, str]:
     return url, key
 
 
-def _headers(key: str, schema: str) -> dict:
+def _headers(key: str, schema: str, on_conflict: str = "return=representation") -> dict:
     return {
         "apikey": key,
         "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
         "Content-Profile": schema,
         "Accept-Profile": schema,
-        "Prefer": "return=representation",
+        "Prefer": on_conflict,
     }
 
 
@@ -52,15 +52,18 @@ def _get(base_url: str, key: str, schema: str, table: str, params: dict | None =
     return r.json()
 
 
-def _post(base_url: str, key: str, schema: str, table: str, data: dict) -> dict:
+def _post(base_url: str, key: str, schema: str, table: str, data: dict, ignore_duplicates: bool = False) -> dict | None:
+    prefer = "resolution=ignore-duplicates,return=representation" if ignore_duplicates else "return=representation"
     r = requests.post(
         f"{base_url}/rest/v1/{table}",
-        headers=_headers(key, schema),
+        headers=_headers(key, schema, prefer),
         json=data,
     )
     if not r.ok:
         raise RuntimeError(f"POST {schema}.{table} failed ({r.status_code}): {r.text}")
     rows = r.json()
+    if not rows:
+        return None  # duplicate was ignored
     return rows[0] if isinstance(rows, list) else rows
 
 
@@ -118,7 +121,7 @@ def transform_document(raw_row: dict, base_url: str, key: str, dry_run: bool) ->
         print(f"  [dry-run] sections:    {len(sections)}")
         return
 
-    # 1. Insert into core.acts
+    # 1. Insert into core.acts (ignore if same source_url already exists)
     act = _post(base_url, key, "core", "acts", {
         "title":        content.get("act", ""),
         "jurisdiction": "ontario",
@@ -129,7 +132,12 @@ def transform_document(raw_row: dict, base_url: str, key: str, dry_run: bool) ->
         "version_date": content.get("version_date", ""),
         "currency_date": content.get("currency_date", ""),
         "last_amended": content.get("last_amended", ""),
-    })
+    }, ignore_duplicates=True)
+
+    if act is None:
+        print(f"  [transform] core.acts: duplicate source_url — skipping (already imported)")
+        return
+
     act_id = act["id"]
     print(f"  [transform] core.acts id={act_id}: {act['title']}")
 
@@ -146,7 +154,7 @@ def transform_document(raw_row: dict, base_url: str, key: str, dry_run: bool) ->
             "raw_text":     section.get("text", ""),
             "section_type": section_type,
             "promoted":     False,
-        })
+        }, ignore_duplicates=True)
         section_count += 1
 
     print(f"  [transform] {section_count} sections inserted")
@@ -174,6 +182,7 @@ def main() -> None:
         rows = _get(base_url, key, "raw", "source_documents", {
             "id":        f"eq.{args.id}",
             "confirmed": "eq.true",
+            "status":    "eq.pending",
         })
     else:
         rows = _get(base_url, key, "raw", "source_documents", {
@@ -183,7 +192,7 @@ def main() -> None:
 
     if not rows:
         if args.id:
-            print(f"[transform] id={args.id} not found or confirmed=false — skipping.")
+            print(f"[transform] id={args.id} not found, already imported, or confirmed=false — skipping.")
         else:
             print("[transform] No confirmed pending documents found.")
         return

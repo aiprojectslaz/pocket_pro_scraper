@@ -98,7 +98,8 @@ CREATE TABLE core.acts (
     currency_date text NOT NULL DEFAULT '',
     last_amended text NOT NULL DEFAULT '',
     scraped_at   timestamptz NOT NULL DEFAULT now(),
-    created_at   timestamptz NOT NULL DEFAULT now()
+    created_at   timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (source_url)                               -- prevents duplicate acts for same URL
 );
 
 -- 4b. core.sections — individual sections within a scraped act
@@ -111,7 +112,8 @@ CREATE TABLE core.sections (
     section_type public.section_type NOT NULL DEFAULT 'general',
     promoted     boolean NOT NULL DEFAULT false,
     promoted_at  timestamptz,
-    created_at   timestamptz NOT NULL DEFAULT now()
+    created_at   timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (act_id, section_num)                      -- prevents duplicate sections per act
 );
 
 -- 4c. raw.source_documents — raw JSON blobs from scraper (pre-promotion)
