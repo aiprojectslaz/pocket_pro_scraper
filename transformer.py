@@ -128,7 +128,6 @@ def transform_document(raw_row: dict, base_url: str, key: str, service_key: str,
     act = _post(base_url, service_key, "core", "acts", {
         "title":        content.get("act", ""),
         "jurisdiction": "ontario",
-        "content_tier": "free",
         "source_url":   raw_row.get("source_url", ""),
         "chapter":      content.get("chapter", ""),
         "short_title":  content.get("short_title", ""),
