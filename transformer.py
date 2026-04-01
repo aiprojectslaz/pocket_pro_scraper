@@ -1,5 +1,5 @@
 """
-Transform raw.source_documents → core.acts / core.sections / core.definitions.
+Transform raw.source_documents → core.acts / core.sections.
 
 Usage:
   python transformer.py              # process all pending rows in raw.source_documents
@@ -77,62 +77,79 @@ def _patch(base_url: str, key: str, schema: str, table: str, row_id: int, data: 
 
 
 # ---------------------------------------------------------------------------
+# Section type inference
+# ---------------------------------------------------------------------------
+
+_SECTION_TYPE_KEYWORDS: list[tuple[str, str]] = [
+    ("definitions", "definitions"),
+    ("purpose", "purpose"),
+    ("power", "powers"),
+    ("offence", "offences"),
+    ("penalty", "offences"),
+    ("procedure", "procedure"),
+    ("process", "procedure"),
+    ("application", "procedure"),
+]
+
+
+def _infer_section_type(heading: str, section_num: str) -> str:
+    heading_lower = heading.lower()
+    for keyword, section_type in _SECTION_TYPE_KEYWORDS:
+        if keyword in heading_lower:
+            return section_type
+    if section_num in ("1", "1."):
+        return "definitions"
+    return "general"
+
+
+# ---------------------------------------------------------------------------
 # Transform logic
 # ---------------------------------------------------------------------------
 
-def _definition_text(sub: dict) -> str:
-    """Extract definition text from a subsection dict (handles list or string)."""
-    paragraphs = sub.get("paragraphs", [])
-    if isinstance(paragraphs, list):
-        return paragraphs[0].strip() if paragraphs else ""
-    return str(paragraphs).strip()
-
-
 def transform_document(raw_row: dict, base_url: str, key: str, dry_run: bool) -> None:
-    content   = raw_row.get("content", {})
-    raw_id    = raw_row["id"]
-    sections  = content.get("sections", [])
-    def_count = sum(
-        len(s.get("subsections", []))
-        for s in sections
-        if s.get("title", "").lower() == "definitions"
-    )
+    content  = raw_row.get("content", {})
+    raw_id   = raw_row["id"]
+    sections = content.get("sections", [])
 
     if dry_run:
         print(f"  [dry-run] act:         {content.get('act', '')}")
         print(f"  [dry-run] chapter:     {content.get('chapter', '')}")
+        print(f"  [dry-run] jurisdiction: ontario")
         print(f"  [dry-run] sections:    {len(sections)}")
-        print(f"  [dry-run] definitions: {def_count}")
         return
 
-    # 1. Insert act
+    # 1. Insert into core.acts
     act = _post(base_url, key, "core", "acts", {
-        "title":      content.get("act", ""),
-        "chapter":    content.get("chapter", ""),
-        "source_url": raw_row.get("source_url", ""),
+        "title":        content.get("act", ""),
+        "jurisdiction": "ontario",
+        "content_tier": "free",
+        "source_url":   raw_row.get("source_url", ""),
+        "chapter":      content.get("chapter", ""),
+        "short_title":  content.get("short_title", ""),
+        "version_date": content.get("version_date", ""),
+        "currency_date": content.get("currency_date", ""),
+        "last_amended": content.get("last_amended", ""),
     })
     act_id = act["id"]
-    print(f"  [transform] act id={act_id}: {act['title']}")
+    print(f"  [transform] core.acts id={act_id}: {act['title']}")
 
-    # 2. Insert sections + definitions
+    # 2. Insert into core.sections
+    section_count = 0
     for section in sections:
+        heading = section.get("title", "")
+        section_num = section.get("section_number", "")
+        section_type = _infer_section_type(heading, section_num)
         _post(base_url, key, "core", "sections", {
-            "act_id":         act_id,
-            "section_number": section.get("section_number", ""),
-            "title":          section.get("title", ""),
-            "text":           section.get("text", ""),
+            "act_id":       act_id,
+            "section_num":  section_num,
+            "heading":      heading,
+            "raw_text":     section.get("text", ""),
+            "section_type": section_type,
+            "promoted":     False,
         })
+        section_count += 1
 
-        if section.get("title", "").lower() == "definitions":
-            for sub in section.get("subsections", []):
-                _post(base_url, key, "core", "definitions", {
-                    "act_id":     act_id,
-                    "term":       sub.get("text", "").strip(),
-                    "definition": _definition_text(sub),
-                    "translation": sub.get("translation", ""),
-                })
-
-    print(f"  [transform] {len(sections)} sections, {def_count} definitions inserted")
+    print(f"  [transform] {section_count} sections inserted")
 
     # 3. Mark raw row as imported
     _patch(base_url, key, "raw", "source_documents", raw_id, {"status": "imported"})
@@ -145,7 +162,7 @@ def transform_document(raw_row: dict, base_url: str, key: str, dry_run: bool) ->
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Transform raw.source_documents into core.acts/sections/definitions"
+        description="Transform raw.source_documents into core.acts/sections"
     )
     parser.add_argument("--id",      type=int, help="Process one raw document by id")
     parser.add_argument("--dry-run", action="store_true", help="Preview without writing")
