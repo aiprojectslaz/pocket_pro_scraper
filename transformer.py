@@ -21,14 +21,17 @@ load_dotenv()
 # Supabase REST helpers
 # ---------------------------------------------------------------------------
 
-def _creds() -> tuple[str, str]:
+def _creds() -> tuple[str, str, str]:
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_KEY")
+    service_key = os.environ.get("SUPABASE_SERVICE_KEY")
     if not url:
         raise KeyError("SUPABASE_URL is not set in .env")
     if not key:
         raise KeyError("SUPABASE_KEY is not set in .env")
-    return url, key
+    if not service_key:
+        raise KeyError("SUPABASE_SERVICE_KEY is not set in .env")
+    return url, key, service_key
 
 
 def _headers(key: str, schema: str, on_conflict: str = "return=representation") -> dict:
@@ -109,7 +112,7 @@ def _infer_section_type(heading: str, section_num: str) -> str:
 # Transform logic
 # ---------------------------------------------------------------------------
 
-def transform_document(raw_row: dict, base_url: str, key: str, dry_run: bool) -> None:
+def transform_document(raw_row: dict, base_url: str, key: str, service_key: str, dry_run: bool) -> None:
     content  = raw_row.get("content", {})
     raw_id   = raw_row["id"]
     sections = content.get("sections", [])
@@ -122,7 +125,7 @@ def transform_document(raw_row: dict, base_url: str, key: str, dry_run: bool) ->
         return
 
     # 1. Insert into core.acts (ignore if same source_url already exists)
-    act = _post(base_url, key, "core", "acts", {
+    act = _post(base_url, service_key, "core", "acts", {
         "title":        content.get("act", ""),
         "jurisdiction": "ontario",
         "content_tier": "free",
@@ -147,7 +150,7 @@ def transform_document(raw_row: dict, base_url: str, key: str, dry_run: bool) ->
         heading = section.get("title", "")
         section_num = section.get("section_number", "")
         section_type = _infer_section_type(heading, section_num)
-        _post(base_url, key, "core", "sections", {
+        _post(base_url, service_key, "core", "sections", {
             "act_id":       act_id,
             "section_num":  section_num,
             "heading":      heading,
@@ -176,7 +179,7 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="Preview without writing")
     args = parser.parse_args()
 
-    base_url, key = _creds()
+    base_url, key, service_key = _creds()
 
     if args.id:
         rows = _get(base_url, key, "raw", "source_documents", {
@@ -203,7 +206,7 @@ def main() -> None:
     for row in rows:
         print(f"\n[transform] id={row['id']} — {row.get('title', '(no title)')}")
         try:
-            transform_document(row, base_url, key, dry_run=args.dry_run)
+            transform_document(row, base_url, key, service_key, dry_run=args.dry_run)
         except Exception as e:
             print(f"  ERROR: {e}", file=sys.stderr)
             errors.append((row["id"], str(e)))
