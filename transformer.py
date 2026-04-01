@@ -171,12 +171,21 @@ def main() -> None:
     base_url, key = _creds()
 
     if args.id:
-        rows = _get(base_url, key, "raw", "source_documents", {"id": f"eq.{args.id}"})
+        rows = _get(base_url, key, "raw", "source_documents", {
+            "id":        f"eq.{args.id}",
+            "confirmed": "eq.true",
+        })
     else:
-        rows = _get(base_url, key, "raw", "source_documents", {"status": "eq.pending"})
+        rows = _get(base_url, key, "raw", "source_documents", {
+            "status":    "eq.pending",
+            "confirmed": "eq.true",
+        })
 
     if not rows:
-        print("[transform] No pending documents found.")
+        if args.id:
+            print(f"[transform] id={args.id} not found or confirmed=false — skipping.")
+        else:
+            print("[transform] No confirmed pending documents found.")
         return
 
     print(f"[transform] {len(rows)} document(s) to process.")

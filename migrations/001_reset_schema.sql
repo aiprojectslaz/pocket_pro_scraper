@@ -123,6 +123,7 @@ CREATE TABLE raw.source_documents (
     domain      text NOT NULL DEFAULT '',
     content     jsonb NOT NULL,
     source_id   uuid REFERENCES public.content_sources(id) ON DELETE SET NULL,
+    confirmed   boolean NOT NULL DEFAULT false,  -- must be true for transformer to promote
     scraped_at  timestamptz NOT NULL DEFAULT now(),
     status      text NOT NULL DEFAULT 'pending'
                 CHECK (status IN ('pending', 'imported', 'error'))
